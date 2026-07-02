@@ -2,10 +2,7 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ['better-sqlite3'],
-  webpack: (config) => {
-    config.externals = [...(config.externals || []), { 'better-sqlite3': 'commonjs better-sqlite3' }]
-    return config
-  },
+  turbopack: {},
 }
 
 export default nextConfig

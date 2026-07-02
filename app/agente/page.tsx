@@ -19,7 +19,7 @@ const SUGESTOES_INICIAIS = [
 
 function fmt(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }) }
 
-function RenderDados({ dados }: { dados: unknown }) {
+function RenderDados({ dados }: { dados: Record<string, unknown> | Record<string, unknown>[] }) {
   if (!dados) return null
   if (Array.isArray(dados)) {
     if (dados.length === 0) return null
@@ -120,7 +120,7 @@ export default function Agente() {
             <div className={`max-w-[80%] ${m.tipo === 'user' ? 'order-first' : ''}`}>
               <div className={`rounded-2xl px-4 py-3 ${m.tipo === 'user' ? 'bg-blue-600 text-white ml-auto' : 'bg-gray-900 border border-gray-800 text-gray-100'}`}>
                 <p className="text-sm whitespace-pre-wrap">{m.texto}</p>
-                {m.tipo === 'bot' && m.dados && <RenderDados dados={m.dados} />}
+                {m.tipo === 'bot' && m.dados != null && <RenderDados dados={m.dados as Record<string, unknown> | Record<string, unknown>[]} />}
               </div>
               {m.tipo === 'bot' && m.sugestoes && m.sugestoes.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">

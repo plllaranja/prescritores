@@ -1,5 +1,5 @@
-// @ts-expect-error fuzzball has no types
-import fuzz from 'fuzzball'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const fuzz = require('fuzzball') as { token_sort_ratio: (a: string, b: string) => number }
 import { getDb, getConfig } from './db'
 
 export interface MatchResult {

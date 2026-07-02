@@ -185,7 +185,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
               <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={v => fmt(v)} width={90} />
-              <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
+              <Tooltip formatter={(v) => typeof v === 'number' ? fmt(v) : v} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
               <Legend />
               {repsNomes.map((r, i) => (
                 <Line key={r} type="monotone" dataKey={r} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={false} />
