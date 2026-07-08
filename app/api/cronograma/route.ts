@@ -119,7 +119,7 @@ function gerarParaRep(
   diasDoMes: Date[],
   temas: Record<number, string[]>,
   visitasPorDiaOverride: number | undefined,
-  insertCronograma: ReturnType<typeof db.prepare>,
+  insertCronograma: { run: (...args: unknown[]) => unknown },
 ) {
   const visitasPorDia = visitasPorDiaOverride ?? rep.visitas_por_dia ?? 6
   const agendados = new Set<number>()
