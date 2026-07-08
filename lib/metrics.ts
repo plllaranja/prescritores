@@ -106,7 +106,8 @@ export function calcularMetricas(params: {
   const visitaParams: unknown[] = []
 
   if (params.meses?.length && params.anos?.length) {
-    const conds = params.meses.map((m, i) => `(vm.mes = ? AND vm.ano = ?)`).join(' OR ')
+    // Sem alias — usado em queries diretas na tabela
+    const conds = params.meses.map(() => `(mes = ? AND ano = ?)`).join(' OR ')
     whereVendas = `(${conds})`
     for (let i = 0; i < params.meses.length; i++) { vendaParams.push(params.meses[i]); vendaParams.push(params.anos[i]) }
     const conds2 = params.meses.map(() => `(strftime('%m', v.data_visita) = ? AND strftime('%Y', v.data_visita) = ?)`).join(' OR ')
@@ -122,8 +123,8 @@ export function calcularMetricas(params: {
 
   // Vendas no período
   const vendas = db.prepare(`
-    SELECT vm.prescritor_id, vm.mes, vm.ano, vm.valor_total
-    FROM vendas_mensais vm
+    SELECT prescritor_id, mes, ano, valor_total
+    FROM vendas_mensais
     WHERE ${whereVendas}
   `).all(...vendaParams) as VendaRow[]
 
@@ -134,13 +135,19 @@ export function calcularMetricas(params: {
 
   const ultimos3 = todosMeses.slice(-3)
 
-  // Visitas no período
-  const visitas = db.prepare(`
+  // Visitas — todas, sem filtro de período (foi_visitado é independente do mês de venda)
+  let visitasSql = `
     SELECT v.prescritor_id, r.nome as representante_nome, v.data_visita
     FROM visitas v
     LEFT JOIN representantes r ON r.id = v.representante_id
-    WHERE ${whereVisitas} AND v.prescritor_id IS NOT NULL
-  `).all(...visitaParams) as VisitaRow[]
+    WHERE v.prescritor_id IS NOT NULL
+  `
+  const visitasAllParams: unknown[] = []
+  if (params.representante_ids?.length) {
+    visitasSql += ` AND v.representante_id IN (${params.representante_ids.map(() => '?').join(',')})`
+    visitasAllParams.push(...params.representante_ids)
+  }
+  const visitas = db.prepare(visitasSql).all(...visitasAllParams) as VisitaRow[]
 
   // Todos os prescritores com ao menos uma entrada (venda ou visita)
   const prescIds = new Set<number>([

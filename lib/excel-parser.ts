@@ -12,16 +12,58 @@ function removeDiacritics(str: string) {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
+// Converte número em formato BR ("4.424,33") ou US ("4424.33") para float
+function parseBRNumber(val: unknown): number {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  if (val == null || val === '') return 0
+  const str = String(val).trim().replace(/[R$\s]/g, '')
+  if (!str) return 0
+  // Formato BR: ponto como milhar, vírgula como decimal → "4.424,33"
+  if (/^\d{1,3}(\.\d{3})*(,\d+)?$/.test(str)) {
+    return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0
+  }
+  // Só vírgula como decimal → "144,24"
+  if (/^\d+(,\d+)$/.test(str)) {
+    return parseFloat(str.replace(',', '.')) || 0
+  }
+  return parseFloat(str) || 0
+}
+
 export function parseMesAnoFromFilename(filename: string): { mes: number; ano: number } | null {
-  // Padrões: Prescrições_out_2025.xlsx, Prescrições_outubro_2025.xlsx
-  const clean = removeDiacritics(filename.toLowerCase())
-  const match = clean.match(/[_\-\s]([a-z]+)[_\-\s](\d{4})/)
-  if (!match) return null
-  const mesStr = match[1]
-  const ano = parseInt(match[2])
-  const mes = MES_MAP[mesStr]
-  if (!mes || isNaN(ano)) return null
-  return { mes, ano }
+  const clean = removeDiacritics(filename.toLowerCase().replace(/\.xlsx?$/i, ''))
+
+  // Padrão 1: separado por _ - ou espaço com ano 4 dígitos: prescrições_out_2025, junho 2025
+  const m1 = clean.match(/[_\-\s]([a-z]+)[_\-\s](\d{4})/)
+  if (m1) {
+    const mes = MES_MAP[m1[1]]; const ano = parseInt(m1[2])
+    if (mes && !isNaN(ano)) return { mes, ano }
+  }
+
+  // Padrão 2: nome_mes_ano2dig: "junho 26", "maio 26" (ano 2 dígitos)
+  const m2 = clean.match(/([a-z]+)[_\-\s](\d{2})$/)
+  if (m2) {
+    const mes = MES_MAP[m2[1]]; const anoShort = parseInt(m2[2])
+    if (mes && !isNaN(anoShort)) return { mes, ano: 2000 + anoShort }
+  }
+
+  // Padrão 3: começa com o mês por extenso: "junho 26.xlsx", "março_2025"
+  const m3 = clean.match(/^([a-z]+)[_\-\s](\d{2,4})/)
+  if (m3) {
+    const mes = MES_MAP[m3[1]]; const anoRaw = parseInt(m3[2])
+    if (mes && !isNaN(anoRaw)) return { mes, ano: anoRaw < 100 ? 2000 + anoRaw : anoRaw }
+  }
+
+  // Padrão 4: mês em qualquer posição sem separador obrigatório: "vendas_junho_26"
+  for (const [nome, num] of Object.entries(MES_MAP)) {
+    const re = new RegExp(`${nome}[_\\-\\s]?(\\d{2,4})`)
+    const m = clean.match(re)
+    if (m) {
+      const anoRaw = parseInt(m[1])
+      return { mes: num, ano: anoRaw < 100 ? 2000 + anoRaw : anoRaw }
+    }
+  }
+
+  return null
 }
 
 function normalizeNome(nome: string): string {
@@ -59,24 +101,60 @@ export interface VendaRow {
   ticket_medio: number | null
 }
 
+// Detecta índices das colunas pelo cabeçalho
+function detectarColunas(headerRow: unknown[]): Record<string, number> {
+  const map: Record<string, number> = {}
+  for (let i = 0; i < headerRow.length; i++) {
+    const h = removeDiacritics(String(headerRow[i] ?? '').toLowerCase().trim())
+    if (/nutricionista|prescritor|nome|medico|medica/.test(h)) map.nome = i
+    else if (/qtd.*vend|quantidade.*vend|qnt.*vend/.test(h)) map.qtd_vendas = i
+    else if (/valor.*vend|receita|faturamento|vl.*vend/.test(h)) map.valor_total = i
+    else if (/qtd.*item|quantidade.*item|qnt.*item/.test(h)) map.qtd_itens = i
+    else if (/margem/.test(h)) map.margem_pct = i
+    else if (/tkt|ticket/.test(h)) map.ticket_medio = i
+  }
+  return map
+}
+
 export function parseVendas(buffer: Buffer): VendaRow[] {
   const wb = XLSX.read(buffer, { type: 'buffer' })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null })
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
+
+  if (rows.length === 0) return []
+
+  // Encontrar linha de cabeçalho (primeira com texto reconhecível)
+  let headerIdx = 0
+  let cols: Record<string, number> = {}
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const detected = detectarColunas(rows[i] as unknown[])
+    if (detected.nome !== undefined && detected.valor_total !== undefined) {
+      headerIdx = i; cols = detected; break
+    }
+    // Fallback: tenta formato legado (nome na col 0)
+    if (detected.qtd_vendas !== undefined || detected.valor_total !== undefined) {
+      headerIdx = i; cols = detected; break
+    }
+  }
+
+  // Se não detectou pelo cabeçalho, usa posições padrão do formato Le Farma:
+  // Código(0) | data(1) | Nutricionista(2) | Qtd.Vendas(3) | Valor Vendas(4) | Preço Custo(5) | Lucro(6) | Qtd.Itens(7) | Margem(8) | Tkt.Médio(9) | P/A(10)
+  if (cols.nome === undefined) {
+    cols = { nome: 2, qtd_vendas: 3, valor_total: 4, qtd_itens: 7, margem_pct: 8, ticket_medio: 9 }
+  }
 
   const result: VendaRow[] = []
-  for (const row of rows as unknown[][]) {
-    const nome = String(row[0] ?? '').trim()
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i] as unknown[]
+    const nome = String(row[cols.nome] ?? '').trim()
     if (!nome || isExcluido(nome)) continue
+    if (/nutricionista|prescritor|nome|header|codigo|data/i.test(nome)) continue
 
-    // Pular linhas de cabeçalho (primeira coluna não é um nome real)
-    if (/nutricionista|prescritor|nome|header/i.test(nome)) continue
-
-    const qtd_vendas = Number(row[1]) || 0
-    const valor_total = Number(row[2]) || 0
-    const qtd_itens = Number(row[3]) || 0
-    const margem_pct = row[4] != null ? Number(row[4]) : null
-    const ticket_medio = row[5] != null ? Number(row[5]) : null
+    const qtd_vendas  = parseBRNumber(row[cols.qtd_vendas])
+    const valor_total = parseBRNumber(row[cols.valor_total])
+    const qtd_itens   = parseBRNumber(row[cols.qtd_itens])
+    const margem_pct  = cols.margem_pct  != null && row[cols.margem_pct]  != null ? parseBRNumber(row[cols.margem_pct])  : null
+    const ticket_medio= cols.ticket_medio != null && row[cols.ticket_medio] != null ? parseBRNumber(row[cols.ticket_medio]) : null
 
     if (qtd_vendas === 0 && valor_total === 0) continue
 
@@ -110,17 +188,21 @@ export interface VisitaRow {
 function parseDate(val: unknown): string | null {
   if (!val) return null
   if (typeof val === 'number') {
-    // Excel serial date
     const d = XLSX.SSF.parse_date_code(val)
     if (!d) return null
-    const mm = String(d.m).padStart(2, '0')
-    const dd = String(d.d).padStart(2, '0')
-    return `${d.y}-${mm}-${dd}`
+    return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
   }
   const str = String(val).trim()
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`
-  return str || null
+  // DD/MM/YYYY ou DD/MM/YYYY HH:MM ou DD/MM/YYYY HH:MM:SS
+  const m1 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`
+  // YYYY-MM-DD (já no formato certo)
+  const m2 = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`
+  // MM/DD/YYYY (formato americano)
+  const m3 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (m3) return `${m3[3]}-${m3[1].padStart(2,'0')}-${m3[2].padStart(2,'0')}`
+  return null
 }
 
 export function parseVisitas(buffers: Buffer[]): VisitaRow[] {
@@ -164,8 +246,11 @@ export function parseVisitas(buffers: Buffer[]): VisitaRow[] {
 }
 
 export function detectFileType(filename: string): 'vendas' | 'visitas' | 'unknown' {
-  const lower = filename.toLowerCase()
+  const lower = removeDiacritics(filename.toLowerCase())
   if (lower.includes('prescri') || lower.includes('vend')) return 'vendas'
   if (lower.includes('visita') || lower.includes('relatorio')) return 'visitas'
+  // Se o nome contém um mês por extenso + ano, trata como vendas (padrão "junho 26.xlsx")
+  const mesesNomes = Object.keys(MES_MAP)
+  if (mesesNomes.some(m => lower.includes(m)) && /\d{2,4}/.test(lower)) return 'vendas'
   return 'unknown'
 }

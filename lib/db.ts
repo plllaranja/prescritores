@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 
-const DATA_DIR = path.join(process.cwd(), 'data')
+const DATA_DIR = process.env.DATABASE_DIR || path.join(process.cwd(), 'data')
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
 
 const DB_PATH = path.join(DATA_DIR, 'data.db')
@@ -112,6 +112,17 @@ function migrate(db: Database.Database) {
       status TEXT DEFAULT 'ok'
     );
 
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      senha_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'rep' CHECK(role IN ('admin','rep')),
+      representante_id INTEGER REFERENCES representantes(id) ON DELETE SET NULL,
+      ativo INTEGER DEFAULT 1,
+      criado_em TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS cronograma (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       representante_id INTEGER REFERENCES representantes(id),
@@ -122,6 +133,42 @@ function migrate(db: Database.Database) {
       observacoes TEXT,
       criado_em TEXT DEFAULT (datetime('now'))
     );
+  `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notas_prescritor (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      prescritor_id INTEGER NOT NULL REFERENCES prescritores(id) ON DELETE CASCADE,
+      visita_id INTEGER REFERENCES cronograma(id),
+      representante_id INTEGER REFERENCES representantes(id),
+      data TEXT DEFAULT (date('now')),
+      conteudo TEXT NOT NULL,
+      criado_em TEXT DEFAULT (datetime('now'))
+    );
+  `)
+
+  // Migrations incrementais (idempotentes)
+  const cols = (db.prepare(`PRAGMA table_info(prescritores)`).all() as Array<{ name: string }>).map(c => c.name)
+  if (!cols.includes('cidade')) db.exec(`ALTER TABLE prescritores ADD COLUMN cidade TEXT`)
+  if (!cols.includes('bairro')) db.exec(`ALTER TABLE prescritores ADD COLUMN bairro TEXT`)
+  if (!cols.includes('logradouro')) db.exec(`ALTER TABLE prescritores ADD COLUMN logradouro TEXT`)
+
+  // Fix datas no formato DD/MM/YYYY HH:MM → YYYY-MM-DD
+  // Detecta pelo padrão: dígitos/dígitos/4dígitos
+  db.exec(`
+    UPDATE visitas
+    SET data_visita = substr(data_visita,7,4)||'-'||substr(data_visita,4,2)||'-'||substr(data_visita,1,2)
+    WHERE data_visita GLOB '??/??/????*'
+  `)
+  db.exec(`
+    UPDATE visitas
+    SET proximo_contato = substr(proximo_contato,7,4)||'-'||substr(proximo_contato,4,2)||'-'||substr(proximo_contato,1,2)
+    WHERE proximo_contato IS NOT NULL AND proximo_contato GLOB '??/??/????*'
+  `)
+  db.exec(`
+    UPDATE visitas
+    SET ultimo_contato = substr(ultimo_contato,7,4)||'-'||substr(ultimo_contato,4,2)||'-'||substr(ultimo_contato,1,2)
+    WHERE ultimo_contato IS NOT NULL AND ultimo_contato GLOB '??/??/????*'
   `)
 
   // Seed configurações padrão

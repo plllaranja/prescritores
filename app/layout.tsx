@@ -1,25 +1,24 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Poppins } from 'next/font/google'
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
 
-const inter = Inter({ subsets: ['latin'] })
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
-  title: 'Prescritores — Painel Comercial',
-  description: 'Acompanhamento de prescritores e representantes',
+  title: 'Le Farma · Prescritores',
+  description: 'Painel comercial de acompanhamento de prescritores',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} bg-gray-950 text-gray-100 min-h-screen`}>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 ml-64 p-6 overflow-auto">
-            {children}
-          </main>
-        </div>
+      <body className={poppins.variable} style={{ fontFamily: 'var(--font-poppins, Poppins, sans-serif)', background: '#F5F7FA', color: '#1A1A2E', minHeight: '100vh' }}>
+        {children}
       </body>
     </html>
   )

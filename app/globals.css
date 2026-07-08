@@ -1,27 +1,108 @@
 @import "tailwindcss";
-@import "tailwindcss/preflight";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --lf-navy: #2C4A9A;
+  --lf-yellow: #FFCB00;
+  --lf-blue: #009EE2;
+  --lf-olive: #88A201;
+  --lf-blue-tint: #E7F8FF;
+  --lf-bg: #F5F7FA;
+  --lf-card: #FFFFFF;
+  --lf-border: #E8E8E8;
+  --lf-text: #1A1A2E;
+  --lf-muted: #6B7280;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.lf-main {
+  margin-left: 220px;
+}
+
+.lf-chat {
+  height: calc(100vh - 7rem);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  .lf-sidebar {
+    display: none;
+  }
+
+  .lf-mobile-nav {
+    display: block;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .lf-main {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .lf-page {
+    padding: 16px 12px calc(86px + env(safe-area-inset-bottom));
+  }
+
+  .lf-chat {
+    height: calc(100vh - 112px - env(safe-area-inset-bottom));
+  }
+
+  .lf-visita-panel {
+    left: 0;
+    width: 100% !important;
+    max-width: none;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+    line-height: 1.25;
+  }
+
+  h2 {
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  section,
+  .mobile-card {
+    border-radius: 10px !important;
+  }
+
+  table {
+    min-width: 720px;
+  }
+
+  .recharts-wrapper,
+  .recharts-surface {
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 40px;
+  }
+
+  button {
+    min-height: 40px;
+  }
 }
