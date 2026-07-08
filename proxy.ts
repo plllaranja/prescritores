@@ -3,10 +3,9 @@ import { getSessionFromRequest } from '@/lib/session-token'
 
 const PUBLIC = ['/login', '/api/auth/login', '/api/auth/cadastro']
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Deixa rotas públicas e assets passarem
   if (PUBLIC.some(p => pathname.startsWith(p))) return NextResponse.next()
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) return NextResponse.next()
 
@@ -18,7 +17,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Reps não acessam rotas de admin
   if (user.role === 'rep' && pathname.startsWith('/api/auth/cadastro')) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
@@ -29,4 +27,3 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
-

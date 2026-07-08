@@ -3,7 +3,12 @@ import { getDb } from '@/lib/db'
 import { calcularMetricas } from '@/lib/metrics'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// Lazy init — não instancia no módulo para evitar erro de build sem OPENAI_API_KEY
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? 'placeholder' })
+  return _openai
+}
 
 function coletarContexto() {
   const db = getDb()
@@ -111,7 +116,7 @@ export async function POST(req: NextRequest) {
     { role: 'user', content: mensagem }
   ]
 
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages,
     temperature: 0.3,
